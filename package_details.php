@@ -1,252 +1,185 @@
 <?php
-session_start();
-error_reporting(0);
-include('includes/config.php');
-if(isset($_POST['submit2']))
-{
-	$pid=intval($_GET['pkgid']);
-	$useremail=$_SESSION['login'];
-	$fromdate=$_POST['fromdate'];
-	$todate=$_POST['todate'];
-	$comment=$_POST['comment'];
-	$status=0;
-	$sql="INSERT INTO tblbooking(PackageId,UserEmail,FromDate,ToDate,Comment,status) VALUES(:pid,:useremail,:fromdate,:todate,:comment,:status)";
-	$query = $dbh->prepare($sql);
-	$query->bindParam(':pid',$pid,PDO::PARAM_STR);
-	$query->bindParam(':useremail',$useremail,PDO::PARAM_STR);
-	$query->bindParam(':fromdate',$fromdate,PDO::PARAM_STR);
-	$query->bindParam(':todate',$todate,PDO::PARAM_STR);
-	$query->bindParam(':comment',$comment,PDO::PARAM_STR);
-	$query->bindParam(':status',$status,PDO::PARAM_STR);
-	$query->execute();
-	$lastInsertId = $dbh->lastInsertId();
-	if($lastInsertId)
-	{
-		echo '<script>alert("Booked Scuccessfully . Thank you")</script>';
-	}
-	else 
-	{
-		echo '<script>alert("Something Went Wrong. Please try again")</script>';
-	}
+require_once __DIR__ . '/includes/bootstrap.php';
 
+$pid = (int) ($_GET['pkgid'] ?? 0);
+$stmt = $dbh->prepare('SELECT * FROM tbltourpackages WHERE PackageId = ?');
+$stmt->execute([$pid]);
+$pkg = $stmt->fetch();
+
+if (!$pkg) {
+    http_response_code(404);
+    require __DIR__ . '/404.php';
+    exit;
 }
+
+$selfUrl = 'package_details.php?pkgid=' . $pid;
+
+// ---------------------------------------------------------------------------
+// Handle a booking request.
+// ---------------------------------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!user_logged_in()) {
+        flash('info', 'Please sign in to book this package.');
+        redirect('login.php?next=' . urlencode($selfUrl));
+    }
+
+    $from       = (string) ($_POST['fromdate'] ?? '');
+    $to         = (string) ($_POST['todate'] ?? '');
+    $travellers = (int) ($_POST['travellers'] ?? 1);
+    $comment    = trim((string) ($_POST['comment'] ?? ''));
+
+    $fromDate = DateTimeImmutable::createFromFormat('!Y-m-d', $from);
+    $toDate   = DateTimeImmutable::createFromFormat('!Y-m-d', $to);
+    $tomorrow = new DateTimeImmutable('tomorrow');
+
+    $errors = [];
+    if (!$fromDate || !$toDate) {
+        $errors[] = 'Please choose valid travel dates.';
+    } elseif ($fromDate < $tomorrow) {
+        $errors[] = 'Your trip must start tomorrow or later.';
+    } elseif ($toDate < $fromDate) {
+        $errors[] = 'The end date cannot be before the start date.';
+    }
+    if ($travellers < 1 || $travellers > 20) {
+        $errors[] = 'Bookings are for 1 to 20 travellers. Contact us for larger groups.';
+    }
+    if (mb_strlen($comment) > 1000) {
+        $errors[] = 'Special requests must be 1000 characters or fewer.';
+    }
+
+    if ($errors) {
+        remember_input(['fromdate', 'todate', 'travellers', 'comment']);
+        flash('danger', implode(' ', $errors));
+        redirect($selfUrl . '#book');
+    }
+
+    $insert = $dbh->prepare('INSERT INTO tblbooking (PackageId, UserEmail, FromDate, ToDate, Travellers, Comment, status) VALUES (?, ?, ?, ?, ?, ?, 0)');
+    $insert->execute([$pid, current_user_email(), $from, $to, $travellers, $comment ?: null]);
+    $bookingId = (int) $dbh->lastInsertId();
+
+    forget_input();
+    flash('success', sprintf('Booking #BK-%d received! We’ll confirm availability shortly.', $bookingId));
+    redirect('tour_history.php');
+}
+
+$features = array_filter(array_map('trim', preg_split('/[,\n]+/', (string) $pkg->PackageFetures)));
+$related = $dbh->prepare('SELECT * FROM tbltourpackages WHERE PackageId <> ? ORDER BY RAND() LIMIT 3');
+$related->execute([$pid]);
+$related = $related->fetchAll();
+
+$pageTitle = $pkg->PackageName;
+$pageDescription = mb_strimwidth(preg_replace('/\s+/', ' ', (string) $pkg->PackageDetails), 0, 160, '…');
+$activeNav = 'packages';
+$navOverlay = true;
+require __DIR__ . '/includes/header.php';
 ?>
-<!doctype html>
-<html lang="en-gb" class="no-js">
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 
-	<title>My Travel - Package details</title>
-	<meta name="description" content="Traveller">
-	<meta name="author" content="WebThemez">
+<section class="detail-hero" style="background-image: url('<?= e(package_image_url($pkg->PackageImage)) ?>')">
+  <div class="container">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-3">
+        <li class="breadcrumb-item"><a class="text-white text-decoration-none" href="index.php">Home</a></li>
+        <li class="breadcrumb-item"><a class="text-white text-decoration-none" href="packages.php">Packages</a></li>
+        <li class="breadcrumb-item active text-white-50" aria-current="page"><?= e($pkg->PackageName) ?></li>
+      </ol>
+    </nav>
+    <h1 class="mb-3"><?= e($pkg->PackageName) ?></h1>
+    <div class="d-flex flex-wrap gap-2">
+      <?php if ($pkg->PackageLocation): ?><span class="chip"><i class="bi bi-geo-alt"></i><?= e($pkg->PackageLocation) ?></span><?php endif; ?>
+      <?php if ($pkg->PackageDuration): ?><span class="chip"><i class="bi bi-clock"></i><?= e($pkg->PackageDuration) ?></span><?php endif; ?>
+      <?php if ($pkg->PackageType): ?><span class="chip"><i class="bi bi-compass"></i><?= e($pkg->PackageType) ?></span><?php endif; ?>
+      <span class="chip"><i class="bi bi-hash"></i>PKG-<?= (int) $pkg->PackageId ?></span>
+    </div>
+  </div>
+</section>
 
-	<link rel="stylesheet" href="css/bootstrap.min.css" />
-	<!-- <link href="assets/css/bootstrap.css" rel='stylesheet' type='text/css' /> -->
-	<link rel="stylesheet" type="text/css" href="css/isotope.css" media="screen" />
-	<link rel="stylesheet" href="js/fancybox/jquery.fancybox.css" type="text/css" media="screen" />
-	<link rel="stylesheet" type="text/css" href="css/da-slider.css" />
-	<!-- Owl Carousel Assets -->
-	<link href="js/owl-carousel/owl.carousel.css" rel="stylesheet">
-	<link rel="stylesheet" href="css/styles.css" />
-	<!-- Font Awesome -->
-	<!--animate-->
-	<link href="assets/css/animate.css" rel="stylesheet" type="text/css" media="all">
-	<link href="font/css/font-awesome.min.css" rel="stylesheet">
-</head>
+<section class="section-sm">
+  <div class="container">
+    <div class="row g-4 g-lg-5">
+      <div class="col-lg-7 col-xl-8">
+        <h2 class="h3 mb-3">Overview</h2>
+        <div class="text-muted fs-6 lh-lg mb-5">
+          <?php foreach (preg_split('/\R{2,}/', trim((string) $pkg->PackageDetails)) as $paragraph): ?>
+            <p><?= nl2br(e(trim($paragraph))) ?></p>
+          <?php endforeach; ?>
+        </div>
 
-<body>
-	<header class="header">
-		<?php if($_SESSION['login'])
-		{?>
-			<div class="top-header">
-				<div class="container">
-					<ul class="tp-hd-lft wow fadeInLeft animated" data-wow-delay=".5s">
-						<li class="hm"><a href="index.php"><i class="fa fa-home"></i></a></li>
-						<li class="prnt"><a href="profile.php">My Profile</a></li>
-						<li class="prnt"><a href="change_password.php">Change Password</a></li>
-						<li class="prnt"><a href="tour_history.php">My Tour History</a></li>
-					</ul>
-					<ul class="tp-hd-rgt wow fadeInRight animated" data-wow-delay=".5s"> 
-						<li class="tol">Welcome :</li>        
-						<li class="sig"><?php echo htmlentities($_SESSION['login']);?></li> 
-						<li class="sigi"><a href="logout.php" >/ Logout</a></li>
-					</ul>
-					<div class="clearfix"></div>
-				</div>
-			</div>
-			<?php 
-		} else 
-		{
-			?>
-			<div class="top-header">
-				<div class="container">
-					<ul class="tp-hd-lft wow fadeInLeft animated" data-wow-delay=".5s">
-						
-					</ul>
-					<ul class="tp-hd-rgt wow fadeInRight animated" data-wow-delay=".5s"> 
-						<li class="tol">Toll Number : +255745225985</li>        
-						<li class="sig"><a href="#" data-toggle="modal" data-target="#myModal" >Sign Up</a></li> 
-						<li class="sigi"><a href="#" data-toggle="modal" data-target="#myModal4" >&nbsp; Sign In</a></li>
-					</ul>
-					<div class="clearfix"></div>
-				</div>
-			</div>
-			<?php 
-		}?>
-		<div class="container">
-			<nav class="navbar navbar-inverse" role="navigation">
-				<div class="navbar-header adeInDown animated animated" data-wow-delay=".5s" style="visibility: visible; animation-delay: 0.5s; animation-name: fadeInDown;">
-					<a href="#" class="navbar-brand scroll-top logo"><b>Five Star Tours</b></a>
-					<button type="button" id="nav-toggle" class="navbar-toggle" data-toggle="collapse" data-target="#main-nav">
-						<span class="sr-only">Toggle navigation</span>
-						<span class="icon-bar"></span>
-						<span class="icon-bar"></span>
-						<span class="icon-bar"></span>
-					</button>
-				</div>
-				<!--/.navbar-header-->
-				<div id="main-nav" class="collapse navbar-collapse adeInDown animated animated" data-wow-delay=".5s" style="visibility: visible; animation-delay: 0.5s; animation-name: fadeInDown;">
-					<ul class="nav navbar-nav" id="mainNav">
-						<li ><a href="index.php" class="scroll-link">Home</a></li>
-						<li><a href="index.php" class="scroll-link">About Us</a></li>
-						<li><a href="index.php" class="scroll-link">Packages</a></li>
-						<li><a href="index.php" class="scroll-link">Gallery</a></li>
-						<li><a href="index.php" class="scroll-link">Contact Us</a></li>
-					</ul>
-				</div>
-				<!--/.navbar-collapse-->
-			</nav>
-			<!--/.navbar-->
-		</div>
-		<!--/.container-->
-	</header>
-	<!--/.header-->
-	<div id="#top"></div>
-	<section id="home">
-		<div class="banner-container" style="height: 300px;">
-			<!-- <img src="images/banner-bg.jpg" alt="banner" /> -->
-			<div class="container banner-content">
-				<div id="da-slider" class="da-slider">
-					<div class="da-slide">
-						<h2>Tour Packages</h2>
-						<p>Get your plans right away.. enjoy!!!</p>
-						<div class="da-img"></div>
-					</div>
-				</div>
-			</div>
-		</div>
-	</section>
+        <?php if ($features): ?>
+          <h2 class="h3 mb-3">Highlights &amp; inclusions</h2>
+          <ul class="include-list mb-5">
+            <?php foreach ($features as $feature): ?>
+              <li><i class="bi bi-check-circle-fill"></i><span><?= e($feature) ?></span></li>
+            <?php endforeach; ?>
+          </ul>
+        <?php endif; ?>
 
-	<!--Package-->
-	<section id="packages" class="secPad">
-		<div class="container">
-			<div class="heading text-center">
-				<!-- Heading -->
-				<h2>Package Details</h2>
-				<p>Explore the details of your favorite booking</p>
-			</div>
-			<!--- selectroom ---->
-			<div class="selectroom">
-				<div class="container"> 
-					<?php if($error){?><div class="errorWrap"><strong>ERROR</strong>:<?php echo htmlentities($error); ?> </div><?php } 
-					else if($msg){?><div class="succWrap"><strong>SUCCESS</strong>:<?php echo htmlentities($msg); ?> </div><?php }?>
-					<?php 
-					$pid=intval($_GET['pkgid']);
-					$sql = "SELECT * from tbltourpackages where PackageId=:pid";
-					$query = $dbh->prepare($sql);
-					$query -> bindParam(':pid', $pid, PDO::PARAM_STR);
-					$query->execute();
-					$results=$query->fetchAll(PDO::FETCH_OBJ);
-					$cnt=1;
-					if($query->rowCount() > 0)
-					{
-						foreach($results as $result)
-						{ 
-							?>
+        <div class="card-surface bg-sand shadow-none">
+          <h2 class="h5 mb-3"><i class="bi bi-info-circle me-2 text-amber"></i>Good to know</h2>
+          <ul class="check-list small">
+            <li><i class="bi bi-dot"></i>Prices are per person and include park entry fees and transport in a 4x4 safari vehicle.</li>
+            <li><i class="bi bi-dot"></i>Bookings are confirmed by our team, usually within 24 hours.</li>
+            <li><i class="bi bi-dot"></i>You can cancel free of charge from your account up to 24 hours before departure.</li>
+          </ul>
+        </div>
+      </div>
 
-							<div class="selectroom_top">
-								<div class="col-md-4 selectroom_left wow fadeInLeft animated" data-wow-delay=".5s">
-									<img src="admin/pacakgeimages/<?php echo htmlentities($result->PackageImage);?>" class="img-responsive" alt="">
-								</div>
-								<div class="col-md-8 selectroom_right wow fadeInRight animated" data-wow-delay=".5s">
-									<h2><?php echo htmlentities($result->PackageName);?></h2>
-									<p class="dow">#PKG-<?php echo htmlentities($result->PackageId);?></p>
-									<p><b>Package Type :</b> <?php echo htmlentities($result->PackageType);?></p>
-									<p><b>Package Location :</b> <?php echo htmlentities($result->PackageLocation);?></p>
-									<p><b>Features</b> <?php echo htmlentities($result->PackageFetures);?></p>
+      <div class="col-lg-5 col-xl-4" id="book">
+        <div class="card-surface booking-card">
+          <div class="price mb-4"><small>From</small><strong><?= e(format_price($pkg->PackagePrice)) ?></strong> <span class="text-muted">/ person</span></div>
 
-									<div class="clearfix"></div>
-									<div class="grand">
-										<p>Grand Total</p>
-										<h3>USD.800</h3>
-									</div>
-								</div>
-								<h3>Package Details</h3>
-								<p style="padding-top: 1%"><?php echo htmlentities($result->PackageDetails);?> </p> 
-								<div class="clearfix"></div>
-							</div>
-							<form name="book" method="post">
-								<div class="selectroom_top">
-									<div class="selectroom-info animated wow fadeInUp animated" data-wow-duration="1200ms" data-wow-delay="500ms" style="visibility: visible; animation-duration: 1200ms; animation-delay: 500ms; animation-name: fadeInUp; margin-top: -70px">
-										<div class="ban-bottom">
-											<div class=" col-md-6 mr-2 ">
-												<label class="inputLabel">From</label>
-												<input class="form-control" id="datepicker" type="date" placeholder="dd-mm-yyyy"  name="fromdate" required="">
-											</div>
-											<div class=" col-md-6">
-												<label class="inputLabel">To</label>
-												<input class="form-control" id="datepicker1" type="date" placeholder="dd-mm-yyyy" name="todate" required="">
-											</div>
-										</div>
-										<ul>
+          <form id="booking-form" method="post" action="<?= e($selfUrl) ?>" class="needs-validation" novalidate data-price="<?= (int) $pkg->PackagePrice ?>">
+            <?= csrf_field() ?>
+            <div class="row g-3">
+              <div class="col-6">
+                <label class="form-label" for="fromdate">Start date</label>
+                <input class="form-control" type="date" id="fromdate" name="fromdate" value="<?= old('fromdate') ?>" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" required>
+                <div class="invalid-feedback">Choose a start date.</div>
+              </div>
+              <div class="col-6">
+                <label class="form-label" for="todate">End date</label>
+                <input class="form-control" type="date" id="todate" name="todate" value="<?= old('todate') ?>" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" required>
+                <div class="invalid-feedback">Choose an end date.</div>
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="travellers">Travellers</label>
+                <input class="form-control" type="number" id="travellers" name="travellers" value="<?= old('travellers', '1') ?>" min="1" max="20" required>
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="comment">Special requests <span class="text-muted fw-normal">(optional)</span></label>
+                <textarea class="form-control" id="comment" name="comment" rows="3" maxlength="1000" placeholder="Dietary needs, room preferences, pickup location…"><?= old('comment') ?></textarea>
+              </div>
+            </div>
 
-											<li class="spe">
-												<label class="inputLabel">Comment</label>
-												<textarea  class="form-control" rows="4" cols="4" type="text" name="comment" required=""></textarea>
-											</li>
-											<?php if($_SESSION['login'])
-											{?>
-												<li class="spe" align="center">
-													<button type="submit" name="submit2" class="btn-primary btn">Book</button>
-												</li>
-												<?php 
-											} else {?>
-												<li class="sigi" align="center" style="margin-top: 1%">
-													<a href="#" data-toggle="modal" data-target="#myModal4"  class="btn-primary btn" > Book</a>
-												</li>
-												<?php
-											} ?>
-											<div class="clearfix"></div>
-										</ul>
-									</div>
-								</div>
-							</form>
-							<?php 
-						}
-					} ?>
-				</div>
-			</div>
-			<!--- /selectroom ---->
-		</div>
-	</section>
-	<a href="#top" class="topHome"><i class="fa fa-chevron-up fa-2x"></i></a>
-	<?php include('includes/footer.php');?>
-	<!-- signup -->
-	<?php include('includes/signup.php');?>     
-	<!-- //signu -->
-	<!-- signin -->
-	<?php include('includes/signin.php');?>     
-	<!-- //signin -->
-	<script src="js/modernizr-latest.js"></script>
-	<script src="js/jquery-1.8.2.min.js" type="text/javascript"></script>
-	<script src="js/bootstrap.min.js" type="text/javascript"></script>
-	<script src="js/jquery.isotope.min.js" type="text/javascript"></script>
-	<script src="js/fancybox/jquery.fancybox.pack.js" type="text/javascript"></script>
-	<script src="js/jquery.nav.js" type="text/javascript"></script>
-	<script src="js/jquery.cslider.js" type="text/javascript"></script>
-	<script src="contact/contact_me.js"></script>
-	<script src="js/custom.js" type="text/javascript"></script>
-	<script src="js/owl-carousel/owl.carousel.js"></script>
-</body>
-</html>
+            <div class="total-row my-4">
+              <span class="text-muted">Estimated total</span>
+              <strong class="fs-4" id="booking-total"><?= e(format_price($pkg->PackagePrice)) ?></strong>
+            </div>
+
+            <?php if (user_logged_in()): ?>
+              <button class="btn btn-accent btn-lg w-100" type="submit">Request booking</button>
+              <p class="form-text text-center mt-2 mb-0">No payment is taken now — we’ll confirm first.</p>
+            <?php else: ?>
+              <a class="btn btn-accent btn-lg w-100" href="login.php?next=<?= urlencode($selfUrl . '#book') ?>">Sign in to book</a>
+              <p class="form-text text-center mt-2 mb-0">New here? <a href="register.php">Create a free account</a></p>
+            <?php endif; ?>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<?php if ($related): ?>
+  <section class="section-sm bg-sand">
+    <div class="container">
+      <h2 class="mb-4">You might also like</h2>
+      <div class="row g-4">
+        <?php foreach ($related as $pkg): ?>
+          <div class="col-md-6 col-lg-4"><?php require __DIR__ . '/includes/partials/package_card.php'; ?></div>
+        <?php endforeach; ?>
+      </div>
+    </div>
+  </section>
+<?php endif; ?>
+
+<?php forget_input(); require __DIR__ . '/includes/footer.php'; ?>

@@ -1,15 +1,10 @@
 <?php
-session_start(); 
-$_SESSION = array();
-if (ini_get("session.use_cookies")) {
-	$params = session_get_cookie_params();
-	setcookie(session_name(), '', time() - 60*60,
-		$params["path"], $params["domain"],
-		$params["secure"], $params["httponly"]
-	);
-}
-unset($_SESSION['login']);
-session_destroy(); // destroy session
-header("location:index.php"); 
-?>
+require_once __DIR__ . '/includes/bootstrap.php';
 
+// Logging out changes state, so it only happens via a CSRF-protected POST.
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    unset($_SESSION['login'], $_SESSION['login2']);
+    session_regenerate_id(true);
+    flash('success', 'You have been signed out. See you soon!');
+}
+redirect('index.php');
