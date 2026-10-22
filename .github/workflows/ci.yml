@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    name: PHP ${{ matrix.php }} syntax check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.1', '8.2', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: Lint all PHP files
+        run: find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
+
+  smoke:
+    name: Smoke test against MariaDB
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: mariadb:10.11
+        env:
+          MARIADB_DATABASE: tourism
+          MARIADB_USER: tourism
+          MARIADB_PASSWORD: tourism
+          MARIADB_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_USER: tourism
+      DB_PASS: tourism
+      DB_NAME: tourism
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_mysql
+          coverage: none
+      - name: Import schema and demo data
+        run: mysql -h 127.0.0.1 -u tourism -ptourism tourism < database/tourism.sql
+      - name: Start PHP built-in server
+        run: php -S 127.0.0.1:8000 -t . > server.log 2>&1 &
+      - name: Request every public and admin page
+        run: |
+          sleep 2
+          check() {
+            code=$(curl -s -o page.html -w '%{http_code}' "http://127.0.0.1:8000/$1")
+            if [ "$code" != "$2" ]; then echo "::error::$1 returned $code (expected $2)"; exit 1; fi
+            if grep -qiE 'fatal error|warning:|notice:|deprecated:' page.html; then echo "::error::PHP error on $1"; cat page.html; exit 1; fi
+            echo "ok  $code  $1"
+          }
+          check index.php 200
+          check packages.php 200
+          check 'packages.php?q=serengeti&sort=price_desc' 200
+          check 'package_details.php?pkgid=1' 200
+          check 'package_details.php?pkgid=999' 404
+          check login.php 200
+          check register.php 200
+          check forgot_password.php 200
+          check 'check_availability.php?email=demo@fivestartours.test' 200
+          check tour_history.php 302
+          check admin/index.php 200
+          check admin/dashboard.php 302
+          check admin/forgot_password.php 200
+      - name: Reject POST without CSRF token
+        run: test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -d 'name=x' http://127.0.0.1:8000/contact.php)" = "403"
+      - name: Server log
+        if: always()
+        run: cat server.log

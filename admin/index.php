@@ -1,114 +1,101 @@
 <?php
-session_start();
-error_reporting(0);
-include('includes/dbconnection.php');
-if(isset($_POST['login']))
-{
-  $username=$_POST['username'];
-  $password=md5($_POST['password']);
-  $sql ="SELECT * FROM tbladmin WHERE UserName=:username and Password=:password";
-  $query=$dbh->prepare($sql);
-  $query-> bindParam(':username', $username, PDO::PARAM_STR);
-  $query-> bindParam(':password', $password, PDO::PARAM_STR);
-  $query-> execute();
-  $results=$query->fetchAll(PDO::FETCH_OBJ);
-  if($query->rowCount() > 0)
-  {
-    foreach ($results as $result) 
-    {
-      $_SESSION['odmsaid']=$result->ID;
-      $_SESSION['login']=$result->username;
-      $_SESSION['names']=$result->FirstName;
-      $_SESSION['permission']=$result->AdminName;
-      $get=$result->Status;
-    }
-    $aa= $_SESSION['odmsaid'];
-    $sql="SELECT * from tbladmin  where ID=:aa";
-    $query = $dbh -> prepare($sql);
-    $query->bindParam(':aa',$aa,PDO::PARAM_STR);
-    $query->execute();
-    $results=$query->fetchAll(PDO::FETCH_OBJ);
-    $cnt=1;
-    if($query->rowCount() > 0)
-    {
-      foreach($results as $row)
-      {            
-        if($row->Status=="1")
-        { 
-          echo "<script type='text/javascript'> document.location ='dashboard.php'; </script>";              
-        } else
-        { 
-          echo "<script>
-          alert('Your account was disabled Approach Admin');document.location ='index.php';
-          </script>";
-        }
-      } 
-    } 
-  } else{
-    echo "<script>alert('Invalid Details');</script>";
-  }
+require_once __DIR__ . '/includes/auth.php';
+
+if (current_admin()) {
+    redirect('dashboard.php');
 }
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $username = trim((string) ($_POST['username'] ?? ''));
+    $password = (string) ($_POST['password'] ?? '');
+
+    $stmt = $dbh->prepare('SELECT * FROM tbladmin WHERE UserName = ?');
+    $stmt->execute([$username]);
+    $staff = $stmt->fetch();
+
+    if ($staff && verify_password($password, $staff->Password, $rehash)) {
+        if ((int) $staff->Status !== 1) {
+            flash('danger', 'Your account has been deactivated. Please contact an administrator.');
+            redirect('index.php');
+        }
+        if ($rehash) {
+            $dbh->prepare('UPDATE tbladmin SET Password = ? WHERE ID = ?')->execute([$rehash, $staff->ID]);
+        }
+        session_regenerate_id(true);
+        $_SESSION['admin_id'] = (int) $staff->ID;
+        flash('success', 'Welcome back, ' . $staff->FirstName . '!');
+        redirect('dashboard.php');
+    }
+
+    $_SESSION['_old'] = ['username' => $username];
+    flash('danger', 'Invalid username or password.');
+    redirect('index.php');
+}
+
+$flashes = take_flashes();
 ?>
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
 <head>
-
   <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <meta name="description" content="">
-  <meta name="author" content="">
-  <link href="img/logo/logo.png" rel="icon">
-  <title>TMS Admin - Login</title>
-  <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
-  <link href="vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet" type="text/css">
-  <link href="css/ruang-admin.min.css" rel="stylesheet">
-
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Staff sign in · Five Star Tours</title>
+  <link rel="icon" href="../assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
+  <link rel="stylesheet" href="../assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="../assets/css/app.css">
+  <link rel="stylesheet" href="../assets/css/admin.css">
 </head>
+<body>
+<main class="admin-login">
+  <div class="card-surface">
+    <div class="text-center mb-4">
+      <span class="brand-mark mx-auto mb-3" style="width:52px;height:52px;font-size:1.5rem"><i class="bi bi-compass"></i></span>
+      <h1 class="h3 mb-1">Staff portal</h1>
+      <p class="text-muted mb-0">Sign in to manage Five Star Tours</p>
+    </div>
 
-<body class="bg-gradient-login">
-  <!-- Login Content -->
-  <div class="container-login">
-    <div class="row justify-content-center">
-      <div class="col-xl-6 col-lg-12 col-md-9">
-        <div class="card shadow-sm my-5">
-          <div class="card-body p-0">
-            <div class="row">
-              <div class="col-lg-12">
-                <div class="login-form">
-                  <div class="text-center">
-                    <h1 class="h4 text-gray-900 mb-4">Login</h1>
-                  </div>
-                  <form role="form" id=""  method="post" enctype="multipart/form-data" class="form-horizontal">  
-                    <div class="form-group mb-3">
-                      <input type="text" class="form-control form-control-lg" name="username" id="exampleInputEmail1" placeholder="Username"   required>
-                    </div>
-                    <div class="form-group mt-3" >
-                      <input type="password"   name="password" class="form-control form-control-lg" id="exampleInputPassword1" placeholder="Password"  required>
-                    </div>
-                    <div class="mt-3">
-                      <button name="login" class="btn btn-primary btn-block">SIGN IN</button>
-                    </div>
-                    <div class="text-center mt-4 font-weight-light"> 
-                      <a href="forgot_password.php" class="text-primary"> 
-                        Forgot Password
-                      </a>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </div>
-          </div>
+    <?php foreach ($flashes as $flash): ?>
+      <div class="alert alert-<?= e($flash['type']) ?> py-2 small" role="alert"><?= e($flash['message']) ?></div>
+    <?php endforeach; ?>
+
+    <form method="post" class="needs-validation" novalidate>
+      <?= csrf_field() ?>
+      <div class="mb-3">
+        <label class="form-label" for="username">Username</label>
+        <div class="input-icon">
+          <i class="bi bi-person" aria-hidden="true"></i>
+          <input class="form-control" id="username" name="username" value="<?= old('username') ?>" required autocomplete="username" autofocus>
         </div>
       </div>
-    </div>
-  </div>
-  <!-- Login Content -->
-  <script src="vendor/jquery/jquery.min.js"></script>
-  <script src="vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-  <script src="vendor/jquery-easing/jquery.easing.min.js"></script>
-  <script src="js/ruang-admin.min.js"></script>
-</body>
+      <div class="mb-2">
+        <div class="d-flex justify-content-between">
+          <label class="form-label" for="password">Password</label>
+          <a class="small" href="forgot_password.php">Forgot password?</a>
+        </div>
+        <div class="input-icon position-relative">
+          <i class="bi bi-lock" aria-hidden="true"></i>
+          <input class="form-control" type="password" id="password" name="password" required autocomplete="current-password">
+          <button class="password-toggle" type="button" data-password-toggle="password" aria-label="Show password"><i class="bi bi-eye"></i></button>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-lg w-100 mt-4" type="submit">Sign in</button>
+    </form>
 
+    <?php if (APP_ENV === 'local'): ?>
+      <div class="demo-hint mt-4">
+        <strong><i class="bi bi-info-circle me-1"></i>Demo accounts</strong><br>
+        Admin: <code>admin</code> / <code>Admin@1234</code><br>
+        Staff: <code>staff</code> / <code>Staff@1234</code>
+      </div>
+    <?php endif; ?>
+
+    <p class="text-center mt-4 mb-0 small"><a href="../index.php"><i class="bi bi-arrow-left me-1"></i>Back to website</a></p>
+  </div>
+</main>
+<script src="../assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+<script src="../assets/js/app.js"></script>
+</body>
 </html>
+<?php forget_input(); ?>

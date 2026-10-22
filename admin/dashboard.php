@@ -1,159 +1,167 @@
 <?php
-include('includes/checklogin.php');
-check_login();
+require_once __DIR__ . '/includes/auth.php';
+$admin = require_admin();
+
+$stats = $dbh->query(
+    "SELECT
+        (SELECT COUNT(*) FROM tblbooking)                    AS bookings,
+        (SELECT COUNT(*) FROM tblbooking WHERE status = 0)   AS pending,
+        (SELECT COUNT(*) FROM tblbooking WHERE status = 1)   AS confirmed,
+        (SELECT COUNT(*) FROM tblbooking WHERE status = 2)   AS cancelled,
+        (SELECT COUNT(*) FROM tbltourpackages)               AS packages,
+        (SELECT COUNT(*) FROM tblusers)                      AS customers,
+        (SELECT COUNT(*) FROM tblenquiry WHERE Status = 0)   AS enquiries,
+        (SELECT COALESCE(SUM(p.PackagePrice * b.Travellers), 0)
+           FROM tblbooking b JOIN tbltourpackages p ON p.PackageId = b.PackageId
+          WHERE b.status = 1)                                AS revenue"
+)->fetch();
+
+$recent = $dbh->query(
+    'SELECT b.*, p.PackageName, u.FullName
+       FROM tblbooking b
+       LEFT JOIN tbltourpackages p ON p.PackageId = b.PackageId
+       LEFT JOIN tblusers u ON u.EmailId = b.UserEmail
+      ORDER BY b.RegDate DESC
+      LIMIT 6'
+)->fetchAll();
+
+$enquiries = $dbh->query('SELECT * FROM tblenquiry ORDER BY Status ASC, PostingDate DESC LIMIT 4')->fetchAll();
+
+$topPackages = $dbh->query(
+    'SELECT p.PackageName, COUNT(b.BookingId) AS total
+       FROM tbltourpackages p
+       LEFT JOIN tblbooking b ON b.PackageId = p.PackageId AND b.status <> 2
+      GROUP BY p.PackageId, p.PackageName
+      ORDER BY total DESC, p.PackageName
+      LIMIT 5'
+)->fetchAll();
+$maxBookings = max(1, ...array_map(fn ($p) => (int) $p->total, $topPackages ?: [(object) ['total' => 1]]));
+
+$statuses = [0 => ['Pending', 'pending'], 1 => ['Confirmed', 'confirmed'], 2 => ['Cancelled', 'cancelled']];
+$totalBookings = max(1, (int) $stats->bookings);
+
+$pageTitle = 'Dashboard';
+$activeNav = 'dashboard';
+require __DIR__ . '/includes/layout_start.php';
 ?>
 
-<!DOCTYPE html>
-<html lang="en">
+<p class="text-muted mb-4">Good to see you, <?= e($admin->FirstName) ?>. Here’s what’s happening at Five Star Tours today.</p>
 
-<head>
-  <meta charset="utf-8">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-  <meta name="description" content="">
-  <meta name="author" content="">
-  <link href="img/logo/logo.png" rel="icon">
-  <title>Admin - Tourism Management System</title>
-  <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
-  <link href="vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet" type="text/css">
-  <link href="css/ruang-admin.min.css" rel="stylesheet">
-  <link href="css/bootstrap.css" rel="stylesheet">
-</head>
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-xl-3">
+    <a class="stat-card" href="manage_bookings.php?status=pending">
+      <span class="icon-badge amber"><i class="bi bi-hourglass-split"></i></span>
+      <div><div class="value"><?= (int) $stats->pending ?></div><div class="label">Bookings awaiting review</div></div>
+    </a>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <a class="stat-card" href="manage_bookings.php?status=confirmed">
+      <span class="icon-badge"><i class="bi bi-cash-stack"></i></span>
+      <div><div class="value"><?= e(format_price($stats->revenue)) ?></div><div class="label">Confirmed booking value</div></div>
+    </a>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <a class="stat-card" href="manage_users.php">
+      <span class="icon-badge blue"><i class="bi bi-people"></i></span>
+      <div><div class="value"><?= (int) $stats->customers ?></div><div class="label">Registered customers</div></div>
+    </a>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <a class="stat-card" href="manage_enquiries.php">
+      <span class="icon-badge rose"><i class="bi bi-envelope"></i></span>
+      <div><div class="value"><?= (int) $stats->enquiries ?></div><div class="label">Unread enquiries</div></div>
+    </a>
+  </div>
+</div>
 
-<body id="page-top">
-  <div id="wrapper">
-    <!-- Sidebar -->
-    <?php include('includes/sidebar.php');?>
-    <!-- Sidebar -->
-    <div id="content-wrapper" class="d-flex flex-column">
-      <div id="content">
-        <!-- TopBar -->
-        <?php include('includes/header.php');?>
-        <!-- Topbar -->
-
-        <!-- Container Fluid-->
-        <div class="container-fluid" id="container-wrapper">
-          <div class="d-sm-flex align-items-center justify-content-between mb-4">
-            <h1 class="h3 mb-0 text-gray-800">Dashboard</h1>
-            <ol class="breadcrumb">
-              <li class="breadcrumb-item"><a href="dashboard.php">Home</a></li>
-              <li class="breadcrumb-item active" aria-current="page">Dashboard</li>
-            </ol>
-          </div>
-
-          <div class="row mb-3">
-            <!-- Earnings (Monthly) Card Example -->
-            <div class="col-xl-3 col-md-6 mb-4">
-              <div class="card h-100">
-                <div class="card-body">
-                  <div class="row align-items-center">
-                    <div class="col mr-2">
-                      <div class="text-xs font-weight-bold text-uppercase mb-1">Total Bookings </div>
-                      <?php $sql1 = "SELECT BookingId from tblbooking";
-                      $query1 = $dbh -> prepare($sql1);
-                      $query1->execute();
-                      $results1=$query1->fetchAll(PDO::FETCH_OBJ);
-                      $cnt1=$query1->rowCount();
-                      ?>
-                      <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo htmlentities($cnt1);?></div>
-                    </div>
-                    <div class="col-auto">
-                      <i class="fas fa-calendar fa-2x text-primary"></i>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <!-- Earnings (Annual) Card Example -->
-            <div class="col-xl-3 col-md-6 mb-4">
-              <div class="card h-100">
-                <div class="card-body">
-                  <div class="row no-gutters align-items-center">
-                    <div class="col mr-2">
-                      <div class="text-xs font-weight-bold text-uppercase mb-1">Total Packages</div>
-                      <?php $sql3 = "SELECT PackageId from tbltourpackages";
-                      $query3= $dbh -> prepare($sql3);
-                      $query3->execute();
-                      $results3=$query3->fetchAll(PDO::FETCH_OBJ);
-                      $cnt3=$query3->rowCount();
-                      ?>
-                      <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo htmlentities($cnt3);?></div>
-                    </div>
-                    <div class="col-auto">
-                      <i class="fas fa-shopping-cart fa-2x text-success"></i>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <!-- New User Card Example -->
-            <div class="col-xl-3 col-md-6 mb-4">
-              <div class="card h-100">
-                <div class="card-body">
-                  <div class="row no-gutters align-items-center">
-                    <div class="col mr-2">
-                      <div class="text-xs font-weight-bold text-uppercase mb-1">Total Users</div>
-                      <?php $sql = "SELECT id from tblusers";
-                      $query = $dbh -> prepare($sql);
-                      $query->execute();
-                      $results=$query->fetchAll(PDO::FETCH_OBJ);
-                      $cnt=$query->rowCount();
-                      ?>    
-                      <div class="h5 mb-0 mr-3 font-weight-bold text-gray-800"><?php echo htmlentities($cnt);?></div>
-                    </div>
-                    <div class="col-auto">
-                      <i class="fas fa-users fa-2x text-info"></i>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <!-- Pending Requests Card Example -->
-            <div class="col-xl-3 col-md-6 mb-4">
-              <div class="card h-100">
-                <div class="card-body">
-                  <div class="row no-gutters align-items-center">
-                    <div class="col mr-2">
-                      <div class="text-xs font-weight-bold text-uppercase mb-1">Total Admins</div>
-                      <?php $sql = "SELECT id from tbladmin";
-                      $query = $dbh -> prepare($sql);
-                      $query->execute();
-                      $results=$query->fetchAll(PDO::FETCH_OBJ);
-                      $cnt2=$query->rowCount();
-                      ?>    
-                      <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo htmlentities($cnt2);?></div>
-                    </div>
-                    <div class="col-auto">
-                      <i class="fas fa-comments fa-2x text-warning"></i>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- Invoice Example -->
-        <?php include('includes/modal.php');?>
-        <!---Container Fluid-->
+<div class="row g-4">
+  <div class="col-xxl-8">
+    <section class="panel h-100">
+      <div class="panel-header">
+        <h2>Recent bookings</h2>
+        <a class="btn btn-outline-primary btn-sm" href="manage_bookings.php">View all</a>
       </div>
-      <!-- Footer -->
-      <?php include('includes/footer.php');?>
+      <div class="table-responsive">
+        <table class="table table-admin">
+          <thead><tr><th>Booking</th><th>Customer</th><th>Package</th><th>Travel dates</th><th>Status</th></tr></thead>
+          <tbody>
+            <?php foreach ($recent as $b): [$label, $class] = $statuses[(int) $b->status] ?? ['Unknown', 'pending']; ?>
+              <tr>
+                <td class="fw-semibold nowrap">#BK-<?= (int) $b->BookingId ?><span class="cell-sub"><?= e(format_date($b->RegDate)) ?></span></td>
+                <td><?= e($b->FullName ?? 'Deleted user') ?><span class="cell-sub"><?= e($b->UserEmail) ?></span></td>
+                <td class="col-min"><?= e($b->PackageName ?? '—') ?></td>
+                <td class="text-nowrap"><?= e(format_date($b->FromDate, 'M j')) ?> – <?= e(format_date($b->ToDate, 'M j, Y')) ?></td>
+                <td><span class="status-badge status-<?= $class ?>"><?= $label ?></span></td>
+              </tr>
+            <?php endforeach; ?>
+            <?php if (!$recent): ?><tr><td colspan="5" class="text-center text-muted py-4">No bookings yet.</td></tr><?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
 
-      <!-- Footer -->
+  <div class="col-xxl-4">
+    <div class="row g-4">
+    <div class="col-md-6 col-xxl-12">
+    <section class="panel h-100">
+      <div class="panel-header"><h2>Bookings overview</h2><span class="text-muted small"><?= (int) $stats->bookings ?> total</span></div>
+      <div class="panel-body">
+        <div class="status-bar mb-3" role="img" aria-label="<?= (int) $stats->pending ?> pending, <?= (int) $stats->confirmed ?> confirmed, <?= (int) $stats->cancelled ?> cancelled">
+          <span style="width: <?= round($stats->confirmed / $totalBookings * 100, 1) ?>%; background: #2f8a5b"></span>
+          <span style="width: <?= round($stats->pending / $totalBookings * 100, 1) ?>%; background: var(--fst-amber)"></span>
+          <span style="width: <?= round($stats->cancelled / $totalBookings * 100, 1) ?>%; background: #c65b5b"></span>
+        </div>
+        <div class="d-flex justify-content-between small">
+          <span><i class="legend-dot" style="background:#2f8a5b"></i>Confirmed <strong><?= (int) $stats->confirmed ?></strong></span>
+          <span><i class="legend-dot" style="background:var(--fst-amber)"></i>Pending <strong><?= (int) $stats->pending ?></strong></span>
+          <span><i class="legend-dot" style="background:#c65b5b"></i>Cancelled <strong><?= (int) $stats->cancelled ?></strong></span>
+        </div>
+      </div>
+    </section>
+    </div>
+    <div class="col-md-6 col-xxl-12">
+    <section class="panel h-100">
+      <div class="panel-header"><h2>Most booked packages</h2><a class="small" href="manage_packages.php"><?= (int) $stats->packages ?> packages</a></div>
+      <div class="panel-body d-grid gap-3">
+        <?php foreach ($topPackages as $p): ?>
+          <div>
+            <div class="d-flex justify-content-between small mb-1"><span class="text-truncate me-2"><?= e($p->PackageName) ?></span><strong><?= (int) $p->total ?></strong></div>
+            <div class="progress" style="height: 6px" role="progressbar" aria-label="<?= e($p->PackageName) ?> bookings" aria-valuenow="<?= (int) $p->total ?>" aria-valuemin="0" aria-valuemax="<?= $maxBookings ?>">
+              <div class="progress-bar" style="width: <?= round($p->total / $maxBookings * 100) ?>%; background: var(--fst-green-600)"></div>
+            </div>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    </section>
+    </div>
     </div>
   </div>
 
-  <!-- Scroll to top -->
-  <a class="scroll-to-top rounded" href="#page-top">
-    <i class="fas fa-angle-up"></i>
-  </a>
+  <div class="col-12">
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Latest enquiries</h2>
+        <a class="btn btn-outline-primary btn-sm" href="manage_enquiries.php">Open inbox</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-admin">
+          <thead><tr><th>From</th><th>Subject</th><th>Received</th><th>Status</th></tr></thead>
+          <tbody>
+            <?php foreach ($enquiries as $q): ?>
+              <tr>
+                <td><?= e($q->FullName) ?><span class="cell-sub"><?= e($q->EmailId) ?></span></td>
+                <td><?= e($q->Subject) ?></td>
+                <td class="text-nowrap"><?= e(format_date($q->PostingDate, 'M j, Y H:i')) ?></td>
+                <td><?= (int) $q->Status === 1 ? '<span class="status-badge status-confirmed">Read</span>' : '<span class="status-badge status-pending">New</span>' ?></td>
+              </tr>
+            <?php endforeach; ?>
+            <?php if (!$enquiries): ?><tr><td colspan="4" class="text-center text-muted py-4">No enquiries yet.</td></tr><?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>
 
-  <script src="vendor/jquery/jquery.min.js"></script>
-  <script src="vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-  <script src="vendor/jquery-easing/jquery.easing.min.js"></script>
-  <script src="js/ruang-admin.min.js"></script>
-  <script src="vendor/chart.js/Chart.min.js"></script>
-  <script src="js/demo/chart-area-demo.js"></script>  
-</body>
-
-</html>
+<?php require __DIR__ . '/includes/layout_end.php'; ?>

@@ -1,0 +1,54 @@
+# Local development environment — replaces XAMPP.
+#   docker compose up -d      → website   http://localhost:8080
+#                               admin     http://localhost:8080/admin
+#                               database  http://localhost:8081 (phpMyAdmin)
+services:
+  app:
+    build: .
+    ports:
+      - "8080:80"
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "false"
+      DB_HOST: db
+      DB_NAME: tourism
+      DB_USER: tourism
+      DB_PASS: tourism
+    volumes:
+      - ./:/var/www/html          # live-edit the code without rebuilding
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: mariadb:10.11
+    environment:
+      MARIADB_DATABASE: tourism
+      MARIADB_USER: tourism
+      MARIADB_PASSWORD: tourism
+      MARIADB_ROOT_PASSWORD: root
+    volumes:
+      - db_data:/var/lib/mysql
+      # Imported automatically the first time the database volume is created.
+      - ./database/tourism.sql:/docker-entrypoint-initdb.d/01-tourism.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  phpmyadmin:
+    image: phpmyadmin:5
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: db
+      PMA_USER: tourism
+      PMA_PASSWORD: tourism
+    depends_on:
+      - db
+
+volumes:
+  db_data:

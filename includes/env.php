@@ -21,7 +21,14 @@ function load_env(string $path): void
         }
 
         [$key, $value] = array_map('trim', explode('=', $line, 2));
-        $value = trim($value, "\"'");
+        if ($value !== '' && ($value[0] === '"' || $value[0] === "'")) {
+            // Quoted value: take everything up to the closing quote.
+            $end = strpos($value, $value[0], 1);
+            $value = $end === false ? substr($value, 1) : substr($value, 1, $end - 1);
+        } else {
+            // Unquoted value: drop an inline "# comment".
+            $value = trim((string) preg_replace('/(^|\s+)#.*$/', '', $value));
+        }
 
         if (getenv($key) === false) {
             putenv("$key=$value");

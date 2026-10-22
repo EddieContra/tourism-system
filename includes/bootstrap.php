@@ -96,6 +96,6 @@ try {
 // CSRF protection for every state-changing request.
 // ---------------------------------------------------------------------------
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && !csrf_valid($_POST['_token'] ?? null)) {
-    http_response_code(419);
+    http_response_code(403);
     exit(render_error_page('Page expired', 'Your session expired or the form was submitted twice. Please go back, refresh the page and try again.'));
 }

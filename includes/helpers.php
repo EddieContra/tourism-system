@@ -142,7 +142,7 @@ function csrf_valid(?string $token): bool
 function require_csrf_get(): void
 {
     if (!csrf_valid($_GET['_token'] ?? null)) {
-        http_response_code(419);
+        http_response_code(403);
         exit(render_error_page('Link expired', 'This action link has expired. Please go back, refresh the page and try again.'));
     }
 }
@@ -221,7 +221,11 @@ function require_user(): void
 /** Only allow redirects back to pages on this site. */
 function safe_next(?string $next, string $fallback = 'index.php'): string
 {
-    if ($next === null || $next === '' || preg_match('#^(?:[a-z][a-z0-9+.-]*:|//|\\\\)#i', $next)) {
+    if ($next === null || $next === '' || str_contains($next, '\\') || preg_match('/[\x00-\x20]/', $next) || str_starts_with($next, '//')) {
+        return $fallback;
+    }
+    $parts = parse_url($next);
+    if ($parts === false || isset($parts['scheme']) || isset($parts['host'])) {
         return $fallback;
     }
     return $next;
@@ -291,8 +295,16 @@ function store_uploaded_image(array $file, string $targetDir): string
         'image/webp' => 'webp',
         'image/gif'  => 'gif',
     ];
-    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
-    if (!isset($allowed[$mime]) || @getimagesize($file['tmp_name']) === false) {
+    // getimagesize() parses the actual image header; finfo double-checks when available.
+    $info = @getimagesize($file['tmp_name']);
+    $mime = $info['mime'] ?? '';
+    if (class_exists('finfo')) {
+        $detected = (new finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
+        if ($detected !== $mime) {
+            $mime = '';
+        }
+    }
+    if (!isset($allowed[$mime])) {
         throw new RuntimeException('Only JPG, PNG, WebP or GIF images are allowed.');
     }
 
