@@ -1,0 +1,43 @@
+# Five Star Tours — Apache configuration (works on XAMPP, Docker and shared hosting)
+
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Block internal folders and files from direct web access.
+    RewriteRule ^(includes|database|docker|tests|vendor|node_modules)(/|$) - [F,L]
+    RewriteRule ^admin/includes(/|$) - [F,L]
+    RewriteRule (^|/)\.(?!well-known) - [F,L]
+    RewriteRule \.(sql|md|log|yml|yaml|dist|example)$ - [F,L,NC]
+    RewriteRule ^(Dockerfile|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml|playwright\.config\.js)$ - [F,L,NC]
+
+    # Search-engine sitemap.
+    RewriteRule ^sitemap\.xml$ sitemap.php [L]
+
+    # Friendly 404 page (relative, so it also works in a subfolder like /tms).
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ 404.php [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg "access plus 30 days"
+    ExpiresByType image/png "access plus 30 days"
+    ExpiresByType image/webp "access plus 30 days"
+    ExpiresByType image/svg+xml "access plus 30 days"
+    ExpiresByType font/woff2 "access plus 1 year"
+    ExpiresByType text/css "access plus 7 days"
+    ExpiresByType application/javascript "access plus 7 days"
+</IfModule>
+
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
+</IfModule>

@@ -1,0 +1,84 @@
+/* ==========================================================================
+   Five Star Tours — admin panel (extends app.css)
+   ========================================================================== */
+
+body.admin { background: #f3f1ec; }
+
+.admin-shell { display: flex; min-height: 100vh; }
+
+/* ---- Sidebar ------------------------------------------------------------ */
+.admin-sidebar { --bs-offcanvas-width: 264px; --bs-offcanvas-bg: var(--fst-green-900); color: rgba(255, 255, 255, .8); }
+@media (min-width: 992px) {
+  .admin-sidebar { width: 264px; flex: 0 0 264px; position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--fst-green-900); display: flex; flex-direction: column; }
+  .admin-sidebar .offcanvas-body { display: flex; padding: 0 1rem 1.25rem; flex-grow: 1; }
+  /* Bootstrap makes .offcanvas-lg transparent and hides its header on desktop. */
+  .admin-sidebar.offcanvas-lg { background-color: var(--fst-green-900) !important; }
+  .admin-sidebar.offcanvas-lg .offcanvas-header { display: flex; }
+}
+.admin-sidebar .offcanvas-header { padding: 1.5rem 1.25rem 1.25rem; }
+.admin-sidebar .offcanvas-body { padding: 0 1rem 1.25rem; }
+.admin-brand { display: flex; align-items: center; gap: .6rem; color: #fff; text-decoration: none; font-family: var(--fst-font-display); font-weight: 700; font-size: 1.25rem; }
+.admin-brand .brand-mark { background: rgba(255, 255, 255, .12); }
+.nav-heading { text-transform: uppercase; letter-spacing: .12em; font-size: .7rem; font-weight: 600; color: rgba(255, 255, 255, .62); margin: 0 0 .5rem .75rem; }
+.admin-sidebar .nav-link { display: flex; align-items: center; gap: .75rem; color: rgba(255, 255, 255, .78); border-radius: 10px; padding: .6rem .75rem; font-weight: 500; font-size: .95rem; }
+.admin-sidebar .nav-link i { font-size: 1.1rem; width: 1.25rem; text-align: center; }
+.admin-sidebar .nav-link:hover { color: #fff; background: rgba(255, 255, 255, .07); }
+.admin-sidebar .nav-link.active { color: #fff; background: var(--fst-green-700); }
+.admin-sidebar .badge { background: var(--fst-amber); font-size: .72rem; }
+
+/* ---- Main area ---------------------------------------------------------- */
+.admin-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.admin-topbar { position: sticky; top: 0; z-index: 1020; display: flex; align-items: center; gap: 1rem; padding: .9rem 1.5rem; background: rgba(243, 241, 236, .9); backdrop-filter: blur(8px); border-bottom: 1px solid var(--fst-sand-200); }
+.admin-topbar h1 { font-family: var(--bs-body-font-family); font-weight: 700; letter-spacing: 0; }
+.admin-user { display: flex; align-items: center; gap: .6rem; border-radius: 999px !important; padding: .3rem .9rem .3rem .3rem !important; background: #fff; border: 1px solid var(--fst-sand-200); font-weight: 400; }
+.admin-user img { border-radius: 50%; object-fit: cover; }
+.admin-content { padding: 1.5rem; flex: 1; }
+@media (min-width: 1200px) { .admin-content { padding: 2rem 2.25rem; } }
+.admin-footer { padding: 1rem 1.5rem; color: var(--fst-muted); font-size: .85rem; }
+
+/* ---- Panels & stats ----------------------------------------------------- */
+.panel { background: #fff; border-radius: var(--fst-radius); box-shadow: var(--fst-shadow-sm); }
+.panel-header { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; justify-content: space-between; padding: 1.1rem 1.35rem; border-bottom: 1px solid var(--fst-sand-100); }
+.panel-header h2 { font-family: var(--bs-body-font-family); font-size: 1.05rem; font-weight: 600; margin: 0; letter-spacing: 0; }
+.panel-body { padding: 1.35rem; }
+
+.stat-card { background: #fff; border-radius: var(--fst-radius); box-shadow: var(--fst-shadow-sm); padding: 1.25rem; display: flex; gap: 1rem; align-items: center; height: 100%; text-decoration: none; color: inherit; transition: transform .2s, box-shadow .2s; }
+a.stat-card:hover { transform: translateY(-2px); box-shadow: var(--fst-shadow); color: inherit; }
+.stat-card .icon-badge { width: 52px; height: 52px; font-size: 1.4rem; border-radius: 14px; }
+.stat-card .value { font-size: 1.65rem; font-weight: 700; line-height: 1.1; }
+.stat-card .label { color: var(--fst-muted); font-size: .88rem; }
+.icon-badge.amber { background: #fdf0e1; color: var(--fst-amber-dark); }
+.icon-badge.blue { background: #e6eefb; color: #2f5fb3; }
+.icon-badge.rose { background: #fbe9ec; color: #b23a52; }
+
+.status-bar { height: 10px; border-radius: 999px; overflow: hidden; display: flex; background: var(--fst-sand-100); }
+.status-bar span { display: block; height: 100%; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: .4rem; }
+
+/* ---- Tables ------------------------------------------------------------- */
+.table-admin { --bs-table-bg: transparent; margin: 0; font-size: .92rem; }
+.table-admin thead th { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--fst-muted); font-weight: 600; background: var(--fst-sand-50); border-bottom: 1px solid var(--fst-sand-200); white-space: nowrap; padding: .75rem .85rem; }
+.table-admin td { padding: .8rem .85rem; vertical-align: middle; border-color: var(--fst-sand-100); }
+.table-admin .col-min { min-width: 190px; }
+.table-admin .nowrap { white-space: nowrap; }
+.table-admin tbody tr:hover { background: #fcfbf8; }
+.thumb { width: 64px; height: 48px; object-fit: cover; border-radius: 8px; }
+.avatar { width: 38px; height: 38px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--fst-green-100); color: var(--fst-green-800); font-weight: 600; font-size: .85rem; flex: 0 0 auto; }
+.cell-sub { display: block; color: var(--fst-muted); font-size: .82rem; }
+.table-actions { display: flex; gap: .35rem; justify-content: flex-end; flex-wrap: nowrap; }
+.table-actions .btn { padding: .3rem .65rem; font-size: .82rem; }
+.btn-icon { width: 34px; height: 34px; padding: 0 !important; display: inline-grid; place-items: center; }
+.no-results { display: none; }
+
+.nav-pills-admin .nav-link { border-radius: 999px; color: var(--fst-ink); font-weight: 500; padding: .4rem 1rem; font-size: .9rem; }
+.nav-pills-admin .nav-link.active { background: var(--fst-green-700); color: #fff; }
+.nav-pills-admin .count { opacity: .7; margin-left: .25rem; }
+
+.enquiry-unread { border-left: 3px solid var(--fst-amber); }
+.message-preview { max-width: 420px; white-space: pre-line; }
+
+/* ---- Admin login -------------------------------------------------------- */
+.admin-login { min-height: 100vh; display: grid; place-items: center; padding: 2rem 1rem; background: linear-gradient(rgba(10, 30, 22, .78), rgba(10, 30, 22, .88)), url("../img/gallery/tara.jpg") center/cover; }
+.admin-login .card-surface { width: 100%; max-width: 420px; }
+.demo-hint { background: var(--fst-sand-100); border-radius: 10px; padding: .75rem 1rem; font-size: .85rem; }
+.demo-hint code { color: var(--fst-green-800); font-weight: 600; }
