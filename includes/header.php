@@ -7,11 +7,15 @@
  *   $pageDescription string  Meta description
  *   $activeNav       string  'home' | 'packages' | 'account'
  *   $navOverlay      bool    Transparent navbar on top of a hero image
+ *   $pageImage       string  Image shown when the page is shared (relative path)
+ *   $preloadImage    string  Above-the-fold image to preload (relative path)
  */
 $pageTitle = isset($pageTitle) ? $pageTitle . ' · ' . APP_NAME : APP_NAME . ' · Safaris & Tours in Arusha, Tanzania';
 $pageDescription ??= 'Five Star Tours is an Arusha-based tour company offering curated safaris, mountain treks and cultural experiences across northern Tanzania.';
 $activeNav ??= '';
 $navOverlay ??= false;
+$pageImage ??= 'assets/img/hero.jpg';
+$preloadImage ??= null;
 $flashes = take_flashes();
 $flashIcons = ['success' => 'check-circle-fill', 'danger' => 'exclamation-octagon-fill', 'warning' => 'exclamation-triangle-fill', 'info' => 'info-circle-fill'];
 ?>
@@ -26,8 +30,14 @@ $flashIcons = ['success' => 'check-circle-fill', 'danger' => 'exclamation-octago
   <meta property="og:title" content="<?= e($pageTitle) ?>">
   <meta property="og:description" content="<?= e($pageDescription) ?>">
   <meta property="og:type" content="website">
-  <script>document.documentElement.classList.add('js');</script>
+  <meta property="og:site_name" content="<?= e(APP_NAME) ?>">
+  <meta property="og:image" content="<?= e(app_url($pageImage)) ?>">
+  <meta name="twitter:card" content="summary_large_image">
+  <script src="assets/js/head.js"></script>
   <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/playfair-display-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <?php if ($preloadImage): ?><link rel="preload" href="<?= e($preloadImage) ?>" as="image" fetchpriority="high"><?php endif; ?>
   <link rel="stylesheet" href="assets/vendor/bootstrap/bootstrap.min.css">
   <link rel="stylesheet" href="assets/vendor/bootstrap-icons/bootstrap-icons.min.css">
   <link rel="stylesheet" href="assets/css/app.css">

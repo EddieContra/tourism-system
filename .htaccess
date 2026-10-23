@@ -6,11 +6,14 @@ DirectoryIndex index.php
 <IfModule mod_rewrite.c>
     RewriteEngine On
     # Block internal folders and files from direct web access.
-    RewriteRule ^(includes|database|docker)(/|$) - [F,L]
+    RewriteRule ^(includes|database|docker|tests|vendor|node_modules)(/|$) - [F,L]
     RewriteRule ^admin/includes(/|$) - [F,L]
     RewriteRule (^|/)\.(?!well-known) - [F,L]
     RewriteRule \.(sql|md|log|yml|yaml|dist|example)$ - [F,L,NC]
-    RewriteRule ^(Dockerfile|composer\.(json|lock))$ - [F,L,NC]
+    RewriteRule ^(Dockerfile|composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml|playwright\.config\.js)$ - [F,L,NC]
+
+    # Search-engine sitemap.
+    RewriteRule ^sitemap\.xml$ sitemap.php [L]
 
     # Friendly 404 page (relative, so it also works in a subfolder like /tms).
     RewriteCond %{REQUEST_FILENAME} !-f

@@ -8,6 +8,13 @@ if (current_admin()) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim((string) ($_POST['username'] ?? ''));
     $password = (string) ($_POST['password'] ?? '');
+    $throttle = throttle_key('admin', $username);
+
+    if (too_many_attempts($throttle)) {
+        $_SESSION['_old'] = ['username' => $username];
+        flash('danger', 'Too many sign-in attempts. Please wait 15 minutes and try again.');
+        redirect('index.php');
+    }
 
     $stmt = $dbh->prepare('SELECT * FROM tbladmin WHERE UserName = ?');
     $stmt->execute([$username]);
@@ -21,12 +28,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($rehash) {
             $dbh->prepare('UPDATE tbladmin SET Password = ? WHERE ID = ?')->execute([$rehash, $staff->ID]);
         }
+        clear_attempts($throttle);
         session_regenerate_id(true);
         $_SESSION['admin_id'] = (int) $staff->ID;
+        $_SESSION['admin_last_seen'] = time();
         flash('success', 'Welcome back, ' . $staff->FirstName . '!');
         redirect('dashboard.php');
     }
 
+    record_attempt($throttle);
     $_SESSION['_old'] = ['username' => $username];
     flash('danger', 'Invalid username or password.');
     redirect('index.php');

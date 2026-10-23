@@ -16,7 +16,11 @@ require_once __DIR__ . '/env.php';
 load_env(APP_ROOT . '/.env');
 
 define('APP_NAME', env('APP_NAME', 'Five Star Tours'));
-define('APP_ENV', env('APP_ENV', 'local'));
+// Without an explicit APP_ENV, only treat requests to this machine as local,
+// so a deploy that forgets its .env never shows demo or development helpers.
+$requestHost = trim(strtolower(preg_replace('/:\d+$/', '', $_SERVER['HTTP_HOST'] ?? 'localhost')), '[]');
+define('APP_ENV', env('APP_ENV') ?: (in_array($requestHost, ['localhost', '127.0.0.1', '::1'], true) || PHP_SAPI === 'cli' ? 'local' : 'production'));
+unset($requestHost);
 define('APP_DEBUG', filter_var(env('APP_DEBUG', 'false'), FILTER_VALIDATE_BOOLEAN));
 
 // Company details shown on the public site.
@@ -43,6 +47,16 @@ date_default_timezone_set(env('APP_TIMEZONE', 'Africa/Dar_es_Salaam'));
 
 require_once __DIR__ . '/helpers.php';
 
+// Unexpected errors: log the details and show a friendly page instead of a blank 500.
+set_exception_handler(function (Throwable $e): void {
+    error_log('Uncaught ' . get_class($e) . ': ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    if (!headers_sent()) {
+        http_response_code(500);
+    }
+    $detail = APP_DEBUG ? ' (' . $e->getMessage() . ')' : '';
+    echo render_error_page('Something went wrong', 'An unexpected error occurred and our team has been notified. Please try again in a moment.' . $detail);
+});
+
 // ---------------------------------------------------------------------------
 // Session: hardened cookie, started once for the whole request.
 // ---------------------------------------------------------------------------
@@ -67,6 +81,10 @@ if (!headers_sent()) {
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+    header("Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'");
+    if (is_https()) {
+        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
 }
 
 // ---------------------------------------------------------------------------

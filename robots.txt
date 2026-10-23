@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /tour_history.php
+Disallow: /profile.php
+Disallow: /change_password.php
+Disallow: /reset_password.php

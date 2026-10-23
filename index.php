@@ -18,6 +18,7 @@ $gallery = [
 $pageDescription = 'Book curated safaris, Kilimanjaro treks and cultural tours across northern Tanzania with Five Star Tours, an Arusha-based tour operator.';
 $activeNav = 'home';
 $navOverlay = true;
+$preloadImage = 'assets/img/hero.jpg';
 require __DIR__ . '/includes/header.php';
 ?>
 
@@ -162,7 +163,7 @@ require __DIR__ . '/includes/header.php';
     <div class="gallery-grid">
       <?php foreach ($gallery as [$file, $alt, $size]): ?>
         <button type="button" class="gallery-item <?= $size ?> reveal" data-full="assets/img/gallery/<?= $file ?>.jpg" aria-label="Open photo: <?= e($alt) ?>">
-          <img src="assets/img/gallery/<?= $file ?>.jpg" alt="<?= e($alt) ?>" loading="lazy">
+          <img src="assets/img/gallery/thumbs/<?= $file ?>.jpg" alt="<?= e($alt) ?>" loading="lazy" decoding="async" width="800" height="533">
         </button>
       <?php endforeach; ?>
     </div>

@@ -10,6 +10,13 @@ if (user_logged_in()) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email    = trim((string) ($_POST['email'] ?? ''));
     $password = (string) ($_POST['password'] ?? '');
+    $throttle = throttle_key('login', $email);
+
+    if (too_many_attempts($throttle)) {
+        remember_input(['email']);
+        flash('danger', 'Too many sign-in attempts. For your security, please wait 15 minutes and try again — or reset your password.');
+        redirect('login.php?next=' . urlencode($next));
+    }
 
     $stmt = $dbh->prepare('SELECT * FROM tblusers WHERE EmailId = ?');
     $stmt->execute([$email]);
@@ -19,11 +26,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($rehash) {
             $dbh->prepare('UPDATE tblusers SET Password = ? WHERE id = ?')->execute([$rehash, $user->id]);
         }
+        clear_attempts($throttle);
         login_user($user);
         flash('success', 'Welcome back, ' . $user->FullName . '!');
         redirect($next);
     }
 
+    record_attempt($throttle);
     remember_input(['email']);
     flash('danger', 'The email or password you entered is incorrect.');
     redirect('login.php?next=' . urlencode($next));

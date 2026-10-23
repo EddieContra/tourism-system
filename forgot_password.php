@@ -9,6 +9,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('forgot_password.php');
     }
 
+    $throttle = throttle_key('reset', $email);
+    if (too_many_attempts($throttle, 3)) {
+        flash('danger', 'Too many reset requests for this email. Please wait 15 minutes and try again.');
+        redirect('forgot_password.php');
+    }
+    record_attempt($throttle);
+
     $stmt = $dbh->prepare('SELECT FullName FROM tblusers WHERE EmailId = ?');
     $stmt->execute([$email]);
     $name = $stmt->fetchColumn();

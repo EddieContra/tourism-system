@@ -20,6 +20,7 @@ Built with **PHP 8 + MySQL/MariaDB** (no framework), **Bootstrap 5.3** and vanil
 - Accounts: register (with live email-availability check), sign in, profile, change password
 - Secure password reset via one-time, expiring email link
 - "My bookings": track status (pending / confirmed / cancelled) and cancel up to 24 h before departure
+- Email notifications when a booking is received, confirmed or cancelled
 - Contact form that lands in the staff enquiries inbox
 
 **Staff portal (`/admin`)**
@@ -41,7 +42,17 @@ Built with **PHP 8 + MySQL/MariaDB** (no framework), **Bootstrap 5.3** and vanil
 - **Uploads** validated by real MIME type, renamed to random names, script execution disabled in `uploads/`
 - **Access control**: role checks on the server for every admin action; customers can only see and cancel their own bookings
 - **Password reset** tokens are random, single-use, expire after 1 hour and only their SHA-256 hash is stored; responses don't reveal whether an email is registered
-- **Hardening**: security headers (`X-Frame-Options`, `nosniff`, `Referrer-Policy`); `.htaccess` blocks `includes/`, `database/`, `.env` and other internal files; errors are logged, not shown, outside debug mode
+- **Brute-force protection**: sign-in and password-reset requests are throttled (5 failed sign-ins per account and IP in 15 minutes)
+- **Staff sessions** expire after 30 minutes of inactivity
+- **Headers**: Content-Security-Policy (no inline scripts), HSTS on HTTPS, `X-Frame-Options`, `nosniff`, `Referrer-Policy`
+- **Hardening**: `.htaccess` blocks `includes/`, `database/`, `tests/`, `.env` and other internal files; errors are logged and users see a friendly error page; demo helpers only appear in local mode
+
+## Quality
+
+- **Accessibility**: WCAG 2.1 AA colour contrast, keyboard navigation, skip link, labelled forms, reduced-motion support — checked automatically with axe-core
+- **Performance**: optimized images with lazy loading and thumbnails, preloaded fonts and hero image, browser caching and compression rules
+- **SEO**: descriptive titles and meta descriptions, Open Graph tags, `robots.txt` and `sitemap.xml`
+- **Automated tests** on every push (GitHub Actions): PHP lint on 8.1–8.3, PHPUnit unit tests, smoke tests, and Playwright end-to-end + accessibility tests against MariaDB
 
 ---
 
@@ -118,13 +129,29 @@ The command prints a public `https://…` URL that works until you stop it. Whil
 
 ---
 
+## Running tests
+
+```bash
+# Unit tests (PHP)
+composer install
+vendor/bin/phpunit
+
+# End-to-end + accessibility tests (needs the site running with a fresh demo database)
+docker compose down -v && docker compose up -d
+npm ci
+npx playwright install chromium
+npx playwright test                 # BASE_URL=http://localhost/tms npx playwright test for XAMPP
+```
+
+---
+
 ## Configuration
 
 Copy `.env.example` to `.env` to override settings. Real environment variables (e.g. from Docker or a hosting panel) take precedence.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `APP_ENV` | `local` | `production` hides demo hints and dev-only reset links |
+| `APP_ENV` | `local` on localhost, otherwise `production` | `production` hides demo hints and dev-only reset links |
 | `APP_DEBUG` | `false` | Show PHP errors in the browser (never enable in production) |
 | `APP_URL` | auto | Public base URL used in emails |
 | `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASS` | XAMPP defaults | Database connection |
@@ -147,6 +174,7 @@ Any host with PHP 8.1+, MySQL/MariaDB and Apache works:
 ├── login.php, register.php, forgot_password.php, reset_password.php, logout.php
 ├── tour_history.php, profile.php, change_password.php   Customer account
 ├── contact.php, check_availability.php             Form handler / JSON endpoint
+├── sitemap.php, robots.txt                         Search-engine files
 ├── includes/
 │   ├── bootstrap.php     Config, session, security headers, DB connection, CSRF guard
 │   ├── helpers.php       Escaping, flash messages, auth, CSRF, uploads, mail
@@ -159,8 +187,9 @@ Any host with PHP 8.1+, MySQL/MariaDB and Apache works:
 ├── assets/               CSS, JS, fonts, images, vendored Bootstrap & icons
 ├── uploads/              Package and profile images (script execution disabled)
 ├── database/tourism.sql  Schema + demo data
+├── tests/                Unit (PHPUnit) and end-to-end/accessibility (Playwright) tests
 ├── Dockerfile, docker-compose.yml, docker/
-└── .github/workflows/ci.yml   Lint on PHP 8.1–8.3 + smoke test against MariaDB
+└── .github/workflows/ci.yml   Lint, unit, smoke and end-to-end tests
 ```
 
 ## Database
@@ -173,6 +202,7 @@ Any host with PHP 8.1+, MySQL/MariaDB and Apache works:
 | `tbladmin` | Staff accounts and roles |
 | `tblenquiry` | Contact-form messages |
 | `tblpassword_resets` | Hashed, expiring password-reset tokens |
+| `tbllogin_attempts` | Recent failed sign-in / reset attempts (brute-force throttling) |
 
 ---
 

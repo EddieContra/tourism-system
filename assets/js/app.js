@@ -35,9 +35,17 @@
     revealEls.forEach((el) => el.classList.add('in'));
   }
 
-  // Auto-dismiss success/info flash messages.
+  // Auto-dismiss success/info flash messages, pausing while hovered or focused.
   document.querySelectorAll('.flash-stack .alert-success, .flash-stack .alert-info').forEach((el) => {
-    setTimeout(() => bootstrap.Alert.getOrCreateInstance(el).close(), 6000);
+    if (el.querySelector('a')) return; // keep messages that contain a link
+    let timer;
+    const start = () => { timer = setTimeout(() => bootstrap.Alert.getOrCreateInstance(el).close(), 8000); };
+    const stop = () => clearTimeout(timer);
+    el.addEventListener('mouseenter', stop);
+    el.addEventListener('focusin', stop);
+    el.addEventListener('mouseleave', start);
+    el.addEventListener('focusout', start);
+    start();
   });
 
   // Confirmation prompts for destructive actions: <form data-confirm="...">
@@ -57,6 +65,44 @@
         event.stopPropagation();
       }
       form.classList.add('was-validated');
+    });
+  });
+
+  // Prevent double submissions: once a POST form is really being sent,
+  // disable its submit button. Runs after validation/confirm handlers.
+  document.querySelectorAll('form[method="post" i]').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+      if (event.defaultPrevented) return;
+      if (form.dataset.submitting) {
+        event.preventDefault();
+        return;
+      }
+      form.dataset.submitting = '1';
+      const button = event.submitter || form.querySelector('[type="submit"]');
+      if (button) {
+        // Deferred so the clicked button's name/value is still part of this submission.
+        setTimeout(() => {
+          button.disabled = true;
+          button.setAttribute('aria-busy', 'true');
+          if (button.textContent.trim().length > 2) {
+            button.dataset.label = button.innerHTML;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Please wait…';
+          }
+        }, 0);
+      }
+    });
+  });
+
+  // Re-enable buttons if the page is restored from the back/forward cache.
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    document.querySelectorAll('form[data-submitting]').forEach((form) => {
+      delete form.dataset.submitting;
+      form.querySelectorAll('[aria-busy="true"]').forEach((b) => {
+        b.disabled = false;
+        b.removeAttribute('aria-busy');
+        if (b.dataset.label) b.innerHTML = b.dataset.label;
+      });
     });
   });
 
@@ -115,9 +161,13 @@
     const price = Number(booking.dataset.price || 0);
     const money = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 
+    const maxDays = Number(booking.dataset.maxDays || 30);
     const update = () => {
       if (from.value) {
         to.min = from.value;
+        const last = new Date(`${from.value}T00:00:00`);
+        last.setDate(last.getDate() + maxDays);
+        to.max = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`;
         if (to.value && to.value < from.value) to.value = from.value;
       }
       const count = Math.max(1, Number(travellers.value) || 1);

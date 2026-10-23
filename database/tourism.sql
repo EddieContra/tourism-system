@@ -14,6 +14,7 @@ SET NAMES utf8mb4;
 SET time_zone = '+00:00';
 SET FOREIGN_KEY_CHECKS = 0;
 
+DROP TABLE IF EXISTS `tbllogin_attempts`;
 DROP TABLE IF EXISTS `tblpassword_resets`;
 DROP TABLE IF EXISTS `tblenquiry`;
 DROP TABLE IF EXISTS `tblbooking`;
@@ -172,4 +173,16 @@ CREATE TABLE `tblpassword_resets` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_reset_token` (`TokenHash`),
   KEY `idx_reset_email` (`EmailId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------------
+-- Failed sign-in / reset attempts, used to throttle brute-force attacks.
+-- ---------------------------------------------------------------------------
+CREATE TABLE `tbllogin_attempts` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `Identifier` varchar(190) NOT NULL,
+  `IpAddress` varchar(45) NOT NULL,
+  `AttemptedAt` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_attempt_lookup` (`Identifier`, `IpAddress`, `AttemptedAt`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

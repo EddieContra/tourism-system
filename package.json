@@ -1,0 +1,12 @@
+{
+  "name": "tourism-system",
+  "private": true,
+  "description": "End-to-end tests for the Five Star Tours website",
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.1",
+    "@playwright/test": "1.49.1"
+  }
+}

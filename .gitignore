@@ -20,3 +20,7 @@
 Thumbs.db
 .idea/
 .vscode/
+/test-results/
+/playwright-report/
+.phpunit.result.cache
+/.phpunit.cache/

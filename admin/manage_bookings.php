@@ -15,18 +15,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id = (int) ($_POST['booking_id'] ?? 0);
     $action = $_POST['action'] ?? '';
 
-    if ($action === 'confirm') {
-        $stmt = $dbh->prepare('UPDATE tblbooking SET status = 1, CancelledBy = NULL WHERE BookingId = ? AND status = 0');
+    $updates = [
+        'confirm' => ["UPDATE tblbooking SET status = 1, CancelledBy = NULL WHERE BookingId = ? AND status = 0", 'confirmed', 'could not be confirmed (it may already be confirmed or cancelled)'],
+        'cancel'  => ["UPDATE tblbooking SET status = 2, CancelledBy = 'a' WHERE BookingId = ? AND status <> 2", 'cancelled', 'is already cancelled'],
+    ];
+
+    if (isset($updates[$action])) {
+        [$sql, $event, $failure] = $updates[$action];
+        $stmt = $dbh->prepare($sql);
         $stmt->execute([$id]);
-        $stmt->rowCount()
-            ? flash('success', "Booking #BK-$id confirmed.")
-            : flash('warning', "Booking #BK-$id could not be confirmed (it may already be confirmed or cancelled).");
-    } elseif ($action === 'cancel') {
-        $stmt = $dbh->prepare("UPDATE tblbooking SET status = 2, CancelledBy = 'a' WHERE BookingId = ? AND status <> 2");
-        $stmt->execute([$id]);
-        $stmt->rowCount()
-            ? flash('success', "Booking #BK-$id cancelled.")
-            : flash('warning', "Booking #BK-$id is already cancelled.");
+
+        if ($stmt->rowCount()) {
+            $info = $dbh->prepare(
+                'SELECT b.*, p.PackageName, p.PackagePrice, u.FullName
+                   FROM tblbooking b
+                   LEFT JOIN tbltourpackages p ON p.PackageId = b.PackageId
+                   LEFT JOIN tblusers u ON u.EmailId = b.UserEmail
+                  WHERE b.BookingId = ?'
+            );
+            $info->execute([$id]);
+            $b = $info->fetch();
+            $emailed = send_booking_email($event, [
+                'email' => $b->UserEmail, 'name' => $b->FullName ?? 'traveller', 'id' => $id,
+                'package' => $b->PackageName ?? 'your trip', 'from' => $b->FromDate, 'to' => $b->ToDate,
+                'travellers' => (int) $b->Travellers, 'total' => (int) $b->PackagePrice * (int) $b->Travellers,
+            ]);
+            flash('success', "Booking #BK-$id $event." . ($emailed ? ' The customer has been emailed.' : ''));
+        } else {
+            flash('warning', "Booking #BK-$id $failure.");
+        }
     }
     redirect('manage_bookings.php?status=' . urlencode($filter));
 }

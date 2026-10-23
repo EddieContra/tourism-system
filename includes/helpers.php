@@ -68,11 +68,12 @@ function render_error_page(string $title, string $message): string
 {
     $t = e($title);
     $m = e($message);
+    $home = e(root_prefix() . 'index.php');
     return <<<HTML
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{$t}</title><style>body{font-family:system-ui,sans-serif;background:#f6f4ef;color:#1f2a24;display:grid;place-items:center;min-height:100vh;margin:0;padding:16px}
 main{max-width:480px;text-align:center}h1{font-size:1.6rem;margin:0 0 .5rem}p{color:#5b665f;line-height:1.6}a{color:#1d6b4f}</style></head>
-<body><main><h1>{$t}</h1><p>{$m}</p><p><a href="javascript:history.back()">Go back</a></p></main></body></html>
+<body><main><h1>{$t}</h1><p>{$m}</p><p><a href="{$home}">Back to the homepage</a></p></main></body></html>
 HTML;
 }
 
@@ -232,6 +233,60 @@ function safe_next(?string $next, string $fallback = 'index.php'): string
 }
 
 // ---------------------------------------------------------------------------
+// Brute-force protection
+// ---------------------------------------------------------------------------
+
+/** Throttle key for an action and account, e.g. throttle_key('login', $email). */
+function throttle_key(string $scope, string $identifier): string
+{
+    return substr($scope . '|' . strtolower(trim($identifier)), 0, 190);
+}
+
+function client_ip(): string
+{
+    return substr($_SERVER['REMOTE_ADDR'] ?? 'unknown', 0, 45);
+}
+
+/**
+ * True when there have been too many recent attempts for this key — either
+ * from the current IP address ($max) or from anywhere ($max * 4, which slows
+ * down attacks spread across many addresses).
+ */
+function too_many_attempts(string $key, int $max = 5, int $minutes = 15): bool
+{
+    global $dbh;
+    $since = date('Y-m-d H:i:s', time() - $minutes * 60);
+
+    $fromIp = $dbh->prepare('SELECT COUNT(*) FROM tbllogin_attempts WHERE Identifier = ? AND IpAddress = ? AND AttemptedAt > ?');
+    $fromIp->execute([$key, client_ip(), $since]);
+    if ((int) $fromIp->fetchColumn() >= $max) {
+        return true;
+    }
+
+    $overall = $dbh->prepare('SELECT COUNT(*) FROM tbllogin_attempts WHERE Identifier = ? AND AttemptedAt > ?');
+    $overall->execute([$key, $since]);
+    return (int) $overall->fetchColumn() >= $max * 4;
+}
+
+function record_attempt(string $key): void
+{
+    global $dbh;
+    $dbh->prepare('INSERT INTO tbllogin_attempts (Identifier, IpAddress, AttemptedAt) VALUES (?, ?, ?)')
+        ->execute([$key, client_ip(), date('Y-m-d H:i:s')]);
+
+    // Housekeeping: occasionally drop records older than a day.
+    if (random_int(1, 50) === 1) {
+        $dbh->prepare('DELETE FROM tbllogin_attempts WHERE AttemptedAt < ?')->execute([date('Y-m-d H:i:s', time() - 86400)]);
+    }
+}
+
+function clear_attempts(string $key): void
+{
+    global $dbh;
+    $dbh->prepare('DELETE FROM tbllogin_attempts WHERE Identifier = ? AND IpAddress = ?')->execute([$key, client_ip()]);
+}
+
+// ---------------------------------------------------------------------------
 // URLs & email
 // ---------------------------------------------------------------------------
 
@@ -263,6 +318,30 @@ function send_mail(string $to, string $subject, string $body): bool
         'Content-Type' => 'text/plain; charset=UTF-8',
     ];
     return mail($to, $subject, $body, $headers);
+}
+
+/**
+ * Email a customer about their booking. $event is 'received', 'confirmed' or 'cancelled'.
+ * $b needs: email, name, id, package, from, to, travellers, total.
+ */
+function send_booking_email(string $event, array $b): bool
+{
+    $intro = [
+        'received'  => "Thanks for your booking request! Our team will check availability and confirm within 24 hours.",
+        'confirmed' => "Great news — your booking is confirmed. We can't wait to welcome you in Tanzania!",
+        'cancelled' => "Your booking has been cancelled. If this is unexpected, just reply to this email and we'll help.",
+    ][$event] ?? '';
+
+    $subject = sprintf('Booking #BK-%d %s — %s', $b['id'], $event, $b['package']);
+    $body = "Hi {$b['name']},\n\n{$intro}\n\n"
+        . "Booking:     #BK-{$b['id']}\n"
+        . "Package:     {$b['package']}\n"
+        . 'Dates:       ' . format_date($b['from']) . ' – ' . format_date($b['to']) . "\n"
+        . "Travellers:  {$b['travellers']}\n"
+        . 'Total:       ' . format_price($b['total']) . "\n\n"
+        . 'Manage your bookings: ' . app_url('tour_history.php') . "\n\n— Five Star Tours";
+
+    return send_mail($b['email'], $subject, $body);
 }
 
 // ---------------------------------------------------------------------------

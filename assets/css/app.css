@@ -21,8 +21,8 @@
   --fst-sand-50: #fbf8f2;
   --fst-sand-100: #f4eee2;
   --fst-sand-200: #e8dec9;
-  --fst-amber: #d9822b;
-  --fst-amber-dark: #b86a1c;
+  --fst-amber: #a85d14;      /* 4.9:1 with white, 4.7:1 on sand — WCAG AA */
+  --fst-amber-dark: #8f4f10;
   --fst-ink: #1b2420;
   --fst-muted: #5e6a63;
   --fst-radius: 14px;
@@ -55,6 +55,8 @@ h4, h5, h6 { font-weight: 600; }
 .text-amber { color: var(--fst-amber) !important; }
 .bg-sand { background: var(--fst-sand-100); }
 .bg-forest { background: var(--fst-green-900); color: #fff; }
+/* Bootstrap's 50% white is too faint over photos (WCAG AA); use 80%. */
+.text-white-50 { color: rgba(255, 255, 255, .8) !important; }
 
 ::selection { background: var(--fst-green-100); }
 
@@ -83,6 +85,13 @@ h4, h5, h6 { font-weight: 600; }
   --bs-btn-active-bg: var(--fst-green-800); --bs-btn-active-border-color: var(--fst-green-800);
 }
 .btn-light { --bs-btn-bg: #fff; --bs-btn-border-color: #fff; }
+/* Slightly darker than Bootstrap's red so it passes WCAG AA on tinted rows. */
+.btn-outline-danger {
+  --bs-btn-color: #b02a37; --bs-btn-border-color: #b02a37;
+  --bs-btn-hover-bg: #b02a37; --bs-btn-hover-border-color: #b02a37;
+  --bs-btn-active-bg: #932330; --bs-btn-active-border-color: #932330;
+}
+.text-danger { color: #b02a37 !important; }
 
 /* ---- Navbar ------------------------------------------------------------- */
 .site-nav { min-height: 76px; background: rgba(251, 248, 242, .92); backdrop-filter: saturate(160%) blur(10px); border-bottom: 1px solid rgba(232, 222, 201, .7); transition: background .25s, border-color .25s, box-shadow .25s; }
@@ -112,7 +121,7 @@ h4, h5, h6 { font-weight: 600; }
 .hero > .container { position: relative; }
 .hero h1 { font-size: clamp(2.4rem, 5.5vw, 4.25rem); line-height: 1.05; max-width: 14ch; }
 .hero .lead { max-width: 36rem; color: rgba(255, 255, 255, .88); font-size: 1.15rem; }
-.eyebrow { display: inline-flex; align-items: center; gap: .5rem; text-transform: uppercase; letter-spacing: .14em; font-size: .78rem; font-weight: 600; color: var(--fst-amber); }
+.eyebrow { display: inline-flex; align-items: center; gap: .5rem; text-transform: uppercase; letter-spacing: .14em; font-size: .78rem; font-weight: 600; color: var(--fst-amber-dark); }
 .hero .eyebrow { color: #f3c58f; }
 
 .hero-search { background: #fff; border-radius: var(--fst-radius-lg); padding: .6rem; box-shadow: 0 20px 50px -20px rgba(0, 0, 0, .5); max-width: 760px; }

@@ -3,3 +3,8 @@
 .env
 node_modules
 docs
+tests
+vendor
+node_modules
+test-results
+playwright-report

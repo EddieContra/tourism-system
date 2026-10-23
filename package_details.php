@@ -13,6 +13,7 @@ if (!$pkg) {
 }
 
 $selfUrl = 'package_details.php?pkgid=' . $pid;
+const MAX_TRIP_DAYS = 30;
 
 // ---------------------------------------------------------------------------
 // Handle a booking request.
@@ -31,14 +32,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $fromDate = DateTimeImmutable::createFromFormat('!Y-m-d', $from);
     $toDate   = DateTimeImmutable::createFromFormat('!Y-m-d', $to);
     $tomorrow = new DateTimeImmutable('tomorrow');
+    $latestStart = new DateTimeImmutable('+18 months');
 
     $errors = [];
     if (!$fromDate || !$toDate) {
         $errors[] = 'Please choose valid travel dates.';
     } elseif ($fromDate < $tomorrow) {
         $errors[] = 'Your trip must start tomorrow or later.';
+    } elseif ($fromDate > $latestStart) {
+        $errors[] = 'We take bookings up to 18 months ahead. Please contact us for later dates.';
     } elseif ($toDate < $fromDate) {
         $errors[] = 'The end date cannot be before the start date.';
+    } elseif ($fromDate->diff($toDate)->days > MAX_TRIP_DAYS) {
+        $errors[] = 'Trips can be at most ' . MAX_TRIP_DAYS . ' days long. Contact us for longer itineraries.';
     }
     if ($travellers < 1 || $travellers > 20) {
         $errors[] = 'Bookings are for 1 to 20 travellers. Contact us for larger groups.';
@@ -57,6 +63,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $insert->execute([$pid, current_user_email(), $from, $to, $travellers, $comment ?: null]);
     $bookingId = (int) $dbh->lastInsertId();
 
+    send_booking_email('received', [
+        'email' => current_user_email(), 'name' => $_SESSION['login2'] ?? 'traveller', 'id' => $bookingId,
+        'package' => $pkg->PackageName, 'from' => $from, 'to' => $to, 'travellers' => $travellers,
+        'total' => $pkg->PackagePrice * $travellers,
+    ]);
+
     forget_input();
     flash('success', sprintf('Booking #BK-%d received! We’ll confirm availability shortly.', $bookingId));
     redirect('tour_history.php');
@@ -71,6 +83,8 @@ $pageTitle = $pkg->PackageName;
 $pageDescription = mb_strimwidth(preg_replace('/\s+/', ' ', (string) $pkg->PackageDetails), 0, 160, '…');
 $activeNav = 'packages';
 $navOverlay = true;
+$pageImage = package_image_url($pkg->PackageImage);
+$preloadImage = $pageImage;
 require __DIR__ . '/includes/header.php';
 ?>
 
@@ -127,17 +141,17 @@ require __DIR__ . '/includes/header.php';
         <div class="card-surface booking-card">
           <div class="price mb-4"><small>From</small><strong><?= e(format_price($pkg->PackagePrice)) ?></strong> <span class="text-muted">/ person</span></div>
 
-          <form id="booking-form" method="post" action="<?= e($selfUrl) ?>" class="needs-validation" novalidate data-price="<?= (int) $pkg->PackagePrice ?>">
+          <form id="booking-form" method="post" action="<?= e($selfUrl) ?>" class="needs-validation" novalidate data-price="<?= (int) $pkg->PackagePrice ?>" data-max-days="<?= MAX_TRIP_DAYS ?>">
             <?= csrf_field() ?>
             <div class="row g-3">
               <div class="col-6">
                 <label class="form-label" for="fromdate">Start date</label>
-                <input class="form-control" type="date" id="fromdate" name="fromdate" value="<?= old('fromdate') ?>" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" required>
+                <input class="form-control" type="date" id="fromdate" name="fromdate" value="<?= old('fromdate') ?>" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" max="<?= date('Y-m-d', strtotime('+18 months')) ?>" required>
                 <div class="invalid-feedback">Choose a start date.</div>
               </div>
               <div class="col-6">
                 <label class="form-label" for="todate">End date</label>
-                <input class="form-control" type="date" id="todate" name="todate" value="<?= old('todate') ?>" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" required>
+                <input class="form-control" type="date" id="todate" name="todate" value="<?= old('todate') ?>" min="<?= date('Y-m-d', strtotime('+1 day')) ?>" max="<?= date('Y-m-d', strtotime('+18 months +' . MAX_TRIP_DAYS . ' days')) ?>" required>
                 <div class="invalid-feedback">Choose an end date.</div>
               </div>
               <div class="col-12">

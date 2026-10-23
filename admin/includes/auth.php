@@ -10,6 +10,8 @@
  */
 require_once dirname(__DIR__, 2) . '/includes/bootstrap.php';
 
+const ADMIN_IDLE_TIMEOUT = 30 * 60; // seconds
+
 const ROLE_LABELS = ['Superuser' => 'Super admin', 'Admin' => 'Admin', 'User' => 'Staff'];
 
 /** The signed-in, active staff member, or null. */
@@ -21,7 +23,15 @@ function current_admin(): ?object
     }
 
     $admin = null;
+
+    // Sign staff out after a period of inactivity.
+    if (!empty($_SESSION['admin_id']) && time() - (int) ($_SESSION['admin_last_seen'] ?? 0) > ADMIN_IDLE_TIMEOUT) {
+        unset($_SESSION['admin_id'], $_SESSION['admin_last_seen']);
+        flash('info', 'You were signed out after 30 minutes of inactivity.');
+    }
+
     if (!empty($_SESSION['admin_id'])) {
+        $_SESSION['admin_last_seen'] = time();
         global $dbh;
         $stmt = $dbh->prepare('SELECT * FROM tbladmin WHERE ID = ? AND Status = 1');
         $stmt->execute([(int) $_SESSION['admin_id']]);
@@ -37,7 +47,9 @@ function require_admin(): object
 {
     $admin = current_admin();
     if (!$admin) {
-        flash('info', 'Please sign in to the staff portal.');
+        if (empty($_SESSION['_flash'])) {
+            flash('info', 'Please sign in to the staff portal.');
+        }
         redirect('index.php');
     }
     return $admin;

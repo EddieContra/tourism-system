@@ -78,3 +78,71 @@ jobs:
       - name: Server log
         if: always()
         run: cat server.log
+
+  unit:
+    name: Unit tests (PHPUnit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+      - name: Run PHPUnit
+        run: vendor/bin/phpunit
+
+  e2e:
+    name: End-to-end & accessibility tests (Playwright)
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: mariadb:10.11
+        env:
+          MARIADB_DATABASE: tourism
+          MARIADB_USER: tourism
+          MARIADB_PASSWORD: tourism
+          MARIADB_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      APP_ENV: local
+      DB_HOST: 127.0.0.1
+      DB_USER: tourism
+      DB_PASS: tourism
+      DB_NAME: tourism
+      BASE_URL: http://127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_mysql
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Import schema and demo data
+        run: mysql -h 127.0.0.1 -u tourism -ptourism tourism < database/tourism.sql
+      - name: Start PHP built-in server
+        run: php -S 127.0.0.1:8080 -t . > server.log 2>&1 &
+      - name: Install Playwright
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run end-to-end tests
+        run: npx playwright test
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+      - name: Server log
+        if: always()
+        run: cat server.log
